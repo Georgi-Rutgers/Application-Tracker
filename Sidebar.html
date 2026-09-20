@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      :root { color-scheme: light; }
+      body { font: 14px Arial, sans-serif; color: #202124; margin: 0; padding: 16px; }
+      label { display: block; font-weight: 600; margin: 14px 0 6px; }
+      input, select, textarea, button { box-sizing: border-box; font: inherit; width: 100%; }
+      input[type="radio"] { margin-right: 6px; width: auto; }
+      input, select, textarea { border: 1px solid #dadce0; border-radius: 4px; padding: 9px; }
+      textarea { min-height: 110px; resize: vertical; }
+      fieldset { border: 1px solid #dadce0; border-radius: 4px; margin: 16px 0 0; padding: 0 10px 10px; }
+      fieldset label { font-weight: normal; margin: 6px 0; }
+      legend { font-weight: 600; padding: 0 4px; }
+      button { border: 0; border-radius: 4px; cursor: pointer; padding: 10px 14px; }
+      button.secondary { background: #f1f3f4; color: #202124; }
+      .resume-row { display: flex; gap: 8px; }
+      .resume-row input { flex: 1; }
+      .resume-row button { width: auto; white-space: nowrap; }
+      button.primary { background: #1a73e8; color: #fff; margin-top: 18px; }
+      button:disabled { cursor: wait; opacity: .65; }
+      .hint { color: #5f6368; font-size: 12px; line-height: 1.4; margin-top: 5px; }
+      #manual-fields { display: none; }
+      #status { display: none; border-radius: 4px; margin-top: 14px; padding: 10px; line-height: 1.4; }
+      #status.error { background: #fce8e6; color: #c5221f; display: block; }
+      #status.success { background: #e6f4ea; color: #137333; display: block; }
+      #spinner { display: none; margin-left: 6px; }
+    </style>
+  </head>
+  <body>
+    <form id="tracker-form">
+      <label for="link">Job posting link</label>
+      <input id="link" type="url" placeholder="https://example.com/job-posting">
+
+      <label for="entry-mode">Entry mode</label>
+      <select id="entry-mode">
+        <option value="Autofill Form">Autofill Form</option>
+        <option value="Manual Entry">Manual Entry</option>
+      </select>
+
+      <div id="manual-fields">
+        <label for="job-title">Position / Job Title</label>
+        <input id="job-title" type="text">
+        <label for="company">Company</label>
+        <input id="company" type="text">
+        <label for="industry">Industry</label>
+        <input id="industry" type="text">
+        <label for="role-type">Role type</label>
+        <input id="role-type" type="text" placeholder="Full-time, contract, etc.">
+        <label for="location">Location</label>
+        <input id="location" type="text">
+        <label for="platform">Platform applied on</label>
+        <input id="platform" type="text">
+        <label for="date-posted">Date posted</label>
+        <input id="date-posted" type="text">
+        <label for="salary">Salary range</label>
+        <input id="salary" type="text">
+      </div>
+
+      <fieldset>
+        <legend>Application details</legend>
+        <label>Cover Letter</label>
+        <label><input type="radio" name="cover-letter" value="Yes"> Yes</label>
+        <label><input type="radio" name="cover-letter" value="No" checked> No</label>
+
+        <label for="resume-upload">Resume upload? <span class="hint">(enter the resume name)</span></label>
+        <div class="resume-row">
+          <input id="resume-upload" type="text" placeholder="Resume filename or name">
+          <button id="last-resume" class="secondary" type="button">Use Last</button>
+        </div>
+
+        <label>Resume Form?</label>
+        <label><input type="radio" name="resume-form" value="Yes"> Yes</label>
+        <label><input type="radio" name="resume-form" value="No" checked> No</label>
+      </fieldset>
+
+      <label for="raw-text">Raw job description <span class="hint">(optional fallback)</span></label>
+      <textarea id="raw-text" placeholder="Paste the job description here if the link cannot be read."></textarea>
+      <div class="hint">Autofill uses Gemini to extract job details. Manual Entry logs the available values without AI extraction.</div>
+
+      <button id="submit" class="primary" type="submit">Log Application <span id="spinner">...</span></button>
+      <div id="status" role="status" aria-live="polite"></div>
+    </form>
+
+    <script>
+      var form = document.getElementById('tracker-form');
+      var submitButton = document.getElementById('submit');
+      var spinner = document.getElementById('spinner');
+      var status = document.getElementById('status');
+
+      function setBusy(isBusy) {
+        submitButton.disabled = isBusy;
+        spinner.style.display = isBusy ? 'inline' : 'none';
+      }
+
+      function showStatus(message, isError) {
+        status.textContent = message;
+        status.className = isError ? 'error' : 'success';
+      }
+
+      function errorMessage(error) {
+        if (!error) return 'The application could not be logged.';
+        return error.message || String(error) || 'The application could not be logged.';
+      }
+
+      function selectedValue(name) {
+        var selected = document.querySelector('input[name="' + name + '"]:checked');
+        return selected ? selected.value : '';
+      }
+
+      document.getElementById('entry-mode').addEventListener('change', function() {
+        document.getElementById('manual-fields').style.display =
+          this.value === 'Manual Entry' ? 'block' : 'none';
+      });
+
+      document.getElementById('last-resume').addEventListener('click', function() {
+        showStatus('Looking for the most recently used resume...', false);
+        google.script.run
+          .withSuccessHandler(function(resume) {
+            if (resume) {
+              document.getElementById('resume-upload').value = resume;
+              showStatus('Most recently used resume selected.', false);
+            } else {
+              showStatus('No resume has been recorded yet. Enter a resume name manually.', true);
+            }
+          })
+          .withFailureHandler(function(error) {
+            showStatus('Could not find the most recent resume: ' + errorMessage(error), true);
+          })
+          .getLastUsedResume();
+      });
+
+      form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        setBusy(true);
+        status.className = '';
+        status.textContent = '';
+
+        var rawText = document.getElementById('raw-text').value.trim();
+        var entryMode = document.getElementById('entry-mode').value;
+        var link = document.getElementById('link').value.trim();
+        if (entryMode === 'Autofill Form' && !link && !rawText) {
+          setBusy(false);
+          showStatus('Enter a job posting link or paste the raw job description.', true);
+          return;
+        }
+        if (entryMode === 'Manual Entry' &&
+            (!document.getElementById('job-title').value.trim() ||
+             !document.getElementById('company').value.trim())) {
+          setBusy(false);
+          showStatus('Manual Entry requires both Position / Job Title and Company.', true);
+          return;
+        }
+        var data = {
+          link: link,
+          rawText: rawText,
+          applicationType: entryMode,
+          coverLetter: selectedValue('cover-letter'),
+          resumeUpload: document.getElementById('resume-upload').value.trim(),
+          resumeForm: selectedValue('resume-form'),
+          extracted: {
+            jobTitle: document.getElementById('job-title').value.trim(),
+            company: document.getElementById('company').value.trim(),
+            industry: document.getElementById('industry').value.trim(),
+            roleType: document.getElementById('role-type').value.trim(),
+            location: document.getElementById('location').value.trim(),
+            platformAppliedOn: document.getElementById('platform').value.trim(),
+            datePosted: document.getElementById('date-posted').value.trim(),
+            salaryRange: document.getElementById('salary').value.trim()
+          }
+        };
+
+        google.script.run
+          .withSuccessHandler(function(result) {
+            setBusy(false);
+            showStatus(result.message, false);
+            form.reset();
+            document.getElementById('manual-fields').style.display = 'none';
+          })
+          .withFailureHandler(function(error) {
+            setBusy(false);
+            showStatus(errorMessage(error), true);
+          })
+          .logApplication(data);
+      });
+    </script>
+  </body>
+</html>
