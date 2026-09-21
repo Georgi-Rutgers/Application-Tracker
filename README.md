@@ -195,6 +195,10 @@ AI extraction depends on the text available from the job page. Use Manual
 Entry for corrections, or provide a more complete job description in the
 raw-text fallback.
 
+### Nothing happens when log application button is clicked
+
+This is likely an account RPC issue. This happens when multiple google accounts are signed in. To resolve this, either sign out of all accounts and just sign in with just the owner of the sheet and apps script, or use an incognito browser and sign into the account.
+
 ## Privacy and security
 
 - Job descriptions and URLs entered in Autofill mode are sent to the Gemini
