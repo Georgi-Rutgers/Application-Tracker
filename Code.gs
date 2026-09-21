@@ -391,27 +391,3 @@ function cleanHtmlText_(html) {
 function stripCodeFences_(text) {
   return String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 }
-
-/**
- * Handles incoming HTTP POST requests from the sidebar, bypassing google.script.run
- */
-function doPost(e) {
-  try {
-    var payload = JSON.parse(e.postData.contents || '{}');
-    
-    if (payload.action === 'getLastUsedResume') {
-      var resume = getLastUsedResume();
-      return ContentService.createTextOutput(JSON.stringify({ ok: true, resume: resume }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    var result = logApplication(payload.data);
-    return ContentService.createTextOutput(JSON.stringify(result))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      ok: false,
-      message: err.message || String(err)
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}

@@ -84,9 +84,6 @@
     </form>
 
     <script>
-      // Replace with your Web App URL from Step 2
-      var WEB_APP_URL = 'YOUR_WEB_APP_URL_HERE';
-
       var form = document.getElementById('tracker-form');
       var submitButton = document.getElementById('submit');
       var spinner = document.getElementById('spinner');
@@ -104,7 +101,6 @@
 
       function errorMessage(error) {
         if (!error) return 'The application could not be logged.';
-        if (typeof error === 'string') return error;
         return error.message || String(error) || 'The application could not be logged.';
       }
 
@@ -118,32 +114,23 @@
           this.value === 'Manual Entry' ? 'block' : 'none';
       });
 
-      // Fetch last resume via HTTP POST
       document.getElementById('last-resume').addEventListener('click', function() {
         showStatus('Looking for the most recently used resume...', false);
-        
-        fetch(WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'getLastUsedResume' })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(res) {
-          if (res.ok && res.resume) {
-            document.getElementById('resume-upload').value = res.resume;
-            showStatus('Most recently used resume selected.', false);
-          } else if (res.ok) {
-            showStatus('No resume has been recorded yet. Enter a resume name manually.', true);
-          } else {
-            showStatus('Could not find resume: ' + res.message, true);
-          }
-        })
-        .catch(function(err) {
-          showStatus('Network error: ' + errorMessage(err), true);
-        });
+        google.script.run
+          .withSuccessHandler(function(resume) {
+            if (resume) {
+              document.getElementById('resume-upload').value = resume;
+              showStatus('Most recently used resume selected.', false);
+            } else {
+              showStatus('No resume has been recorded yet. Enter a resume name manually.', true);
+            }
+          })
+          .withFailureHandler(function(error) {
+            showStatus('Could not find the most recent resume: ' + errorMessage(error), true);
+          })
+          .getLastUsedResume();
       });
 
-      // Submit form via HTTP POST
       form.addEventListener('submit', function(event) {
         event.preventDefault();
         setBusy(true);
@@ -153,7 +140,6 @@
         var rawText = document.getElementById('raw-text').value.trim();
         var entryMode = document.getElementById('entry-mode').value;
         var link = document.getElementById('link').value.trim();
-        
         if (entryMode === 'Autofill Form' && !link && !rawText) {
           setBusy(false);
           showStatus('Enter a job posting link or paste the raw job description.', true);
@@ -161,12 +147,11 @@
         }
         if (entryMode === 'Manual Entry' &&
             (!document.getElementById('job-title').value.trim() ||
-            !document.getElementById('company').value.trim())) {
+             !document.getElementById('company').value.trim())) {
           setBusy(false);
           showStatus('Manual Entry requires both Position / Job Title and Company.', true);
           return;
         }
-        
         var data = {
           link: link,
           rawText: rawText,
@@ -186,26 +171,18 @@
           }
         };
 
-        fetch(WEB_APP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'logApplication', data: data })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(result) {
-          setBusy(false);
-          if (result.ok) {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            setBusy(false);
             showStatus(result.message, false);
             form.reset();
             document.getElementById('manual-fields').style.display = 'none';
-          } else {
-            showStatus(result.message, true);
-          }
-        })
-        .catch(function(err) {
-          setBusy(false);
-          showStatus(errorMessage(err), true);
-        });
+          })
+          .withFailureHandler(function(error) {
+            setBusy(false);
+            showStatus(errorMessage(error), true);
+          })
+          .logApplication(data);
       });
     </script>
   </body>
