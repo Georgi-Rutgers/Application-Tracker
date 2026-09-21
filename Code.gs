@@ -6,7 +6,7 @@
  *   GEMINI_API_KEY = your API key
  */
 
-var GEMINI_MODEL = 'gemini-2.5-flash';
+var GEMINI_MODEL = 'gemini-3.5-flash';
 var GEMINI_API_KEY_PROPERTY = 'GEMINI_API_KEY';
 var MAX_FETCHED_TEXT_LENGTH = 50000;
 var MAX_AI_TEXT_LENGTH = 30000;
@@ -76,6 +76,14 @@ function getLastUsedResume() {
   return '';
 }
 
+function testManual() {
+  logApplication({
+    applicationType: 'Manual Entry',
+    extracted: { jobTitle: 'Test', company: 'Test' }
+  });
+}
+
+
 /**
  * Fetches a public job page and returns readable text.
  * The UI can use the returned error to ask the user for pasted raw text.
@@ -131,8 +139,12 @@ function callGeminiAPI(rawText) {
     throw new Error('The Gemini API key is not configured in Script Properties.');
   }
 
+  // Sanitize key against whitespace or accidental copy-paste artifacts
+  apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+
   var endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' +
     GEMINI_MODEL + ':generateContent?key=' + encodeURIComponent(apiKey);
+
   var prompt = [
     'Extract job application information from the text below.',
     'Return one valid JSON object only: no markdown, code fences, comments, or explanation.',
@@ -159,13 +171,24 @@ function callGeminiAPI(rawText) {
       })
     });
   } catch (error) {
-    throw new Error('Gemini did not respond. Check the API key and try again.');
+    throw new Error('Gemini network request failed: ' + (error.message || String(error)));
   }
 
   var status = response.getResponseCode();
   var body = response.getContentText();
+
   if (status < 200 || status >= 300) {
-    throw new Error('Gemini returned HTTP ' + status + '. Check the API key and model access.');
+    Logger.log('Gemini API Error Response (%s): %s', status, body);
+    var message = 'Gemini returned HTTP ' + status;
+    try {
+      var errJson = JSON.parse(body);
+      if (errJson.error && errJson.error.message) {
+        message += ': ' + errJson.error.message;
+      }
+    } catch (e) {
+      // Body was not JSON
+    }
+    throw new Error(message);
   }
 
   try {
