@@ -10,7 +10,7 @@ also supports manual entry when a posting cannot be fetched or parsed.
 - Custom **Job Tracker** menu in Google Sheets.
 - Sidebar for autofill or manual application entry.
 - Fetches readable text from public job posting URLs.
-- Uses Gemini `gemini-2.5-flash` to extract:
+- Uses Gemini `gemini-3.5-flash` to extract:
   - Position / Job Title
   - Company
   - Industry
